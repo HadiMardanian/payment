@@ -7,7 +7,7 @@ export class AppController {
 
   @Post("payment/request")
   async paymentRequest(@Body() body: any) { 
-    return await this.paymentService.testpayment(body);
+    return await this.paymentService.paymentRequest(body);
   }
 
   @Get("cb")

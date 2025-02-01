@@ -8,7 +8,6 @@ import { MongooseModule } from '@nestjs/mongoose';
   imports: [
     ConfigModule.forRoot(),
     MongooseModule.forRoot(process.env.MONGO_CONNECTION_STRING!),
-    MongooseModule.forFeature([{ name: Payment.name, schema: PaymentModel }]),
     PaymentModule
   ],
   controllers: [],

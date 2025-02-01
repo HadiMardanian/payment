@@ -25,9 +25,10 @@ export class ShepaService {
                 data.mobile,
                 data.description
             );
-            return { isOk: true, link: String(result) };
+            const authority = result.split("/").pop();
+            return { isOk: true, link: String(result), authority };
         } catch (error) {
-            return { isOk: false, link: null };
+            return { isOk: false };
         }
     }
 }

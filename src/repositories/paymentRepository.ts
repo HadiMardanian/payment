@@ -10,7 +10,6 @@ type CreatePaymentData = {
     description: string;
     mobile?: string;
     email?: string;
-    status: "pending" | "failed" | "success" | "canceled";
 }
 
 type UpdatePaymentData = {

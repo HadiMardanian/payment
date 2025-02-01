@@ -48,11 +48,11 @@ export class ZarinpalService {
 
         const result: PaymentRequestResult = await this.gateway.payments.create(body);
         if (result.data.code !== 100 && result.data.code !== 101) {
-            return { isOk: false, link: null }
+            return { isOk: false }
         }
         const paymentRedirect = await this.gateway.payments.getRedirectUrl(result.data.authority);
 
-        return { isOk: true, link: paymentRedirect };
+        return { isOk: true, link: paymentRedirect, authority: result.data.authority };
     }
 
     async getPaymentStatus(amount: number, authority: string) {
