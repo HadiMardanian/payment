@@ -10,6 +10,11 @@ export class AppController {
     return await this.paymentService.paymentRequest(body);
   }
 
+  @Get("payment/status")
+  async paymentStatus(@Query() query: any) {
+    return this.paymentService.paymentStatus(query);
+  }
+
   @Get("cb")
   async callback(@Query() query: any) {
     return await this.paymentService.handleCallback(query);

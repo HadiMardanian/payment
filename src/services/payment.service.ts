@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ShepaService } from './shepa.service';
 import { ZarinpalService } from './zarinpal.service';
 import { PaymentRepository } from 'src/repositories/paymentRepository';
@@ -79,7 +79,11 @@ export class PaymentService {
         } 
     }
 
-    async paymentStatus() {
-
+    async paymentStatus({ paymentId } : { paymentId: string }) {
+        const payment = await this.paymentRepository.findPaymentById(paymentId);
+        if(!payment) {
+            throw new NotFoundException("Payment not found");
+        }
+        return payment;
     }
 }
