@@ -64,4 +64,7 @@ export class PaymentRepository {
         );
         return result;
     }
+    async findPaymentById(id: string) {
+        return await this.paymentModel.findOne({ _id: id });
+    }
 }
