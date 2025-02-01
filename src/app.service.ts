@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
-
+import * as Shepa from "shepa-payment-getaway";
 @Injectable()
 export class AppService {
-  getHello(): string {
-    return 'Hello World!';
+  async getHello() {
+    const shepa = new Shepa("sandbox");
+    console.log(shepa);
+    return 'Hello Worlssssd!';
   }
 }
