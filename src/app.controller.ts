@@ -5,6 +5,14 @@ import { PaymentService } from './services/payment.service';
 export class AppController {
   constructor(private readonly paymentService: PaymentService) {}
 
+  @Post("invoice/create")
+  async createInvoice(@Body() body: any) {
+    return await this.paymentService.createInvoice(body);
+  }
+  @Get("invoice/getInfo")
+  async getInvoiceInfo(@Query() query: any) {
+    return this.paymentService.getInvoiceInfo(query);
+  }
   @Post("payment/request")
   async paymentRequest(@Body() body: any) { 
     return await this.paymentService.paymentRequest(body);
