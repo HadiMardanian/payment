@@ -1,13 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { PaymentService } from './services/payment.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(private readonly paymentService: PaymentService) {}
 
-  @Get()
-  getHello() { 
-    return this.appService.getHello();
+  @Post("payment/request")
+  async paymentRequest(@Body() body: any) { 
+    return await this.paymentService.testpayment(body);
+  }
+
+  @Get("cb")
+  async callback(@Query() query: any) {
+    return await this.paymentService.handleCallback(query);
   }
 }
  
