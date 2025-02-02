@@ -6,6 +6,7 @@ namespace NodeJS {
         MERCHANT_ID: string;
         MAX_PAYMENT_LIMIT: string;
         READY_TO_PAY_LINK: string;
+        READY_TO_PAY_DYNAMIC_LINK: string;
         DEFAULT_GATEWAY: "zarinpal" | "shepa";
         
         SHEPA_URL: string;
