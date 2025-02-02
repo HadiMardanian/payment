@@ -250,9 +250,7 @@ export class PaymentService {
             throw new Error("Payment request failed");
         }
 
-        const result = await this.invoiceRepository.makePaymentPending(paymentId, paymentRequestResult.authority)
-        console.log(result);
+        await this.invoiceRepository.makePaymentPending(paymentId, paymentRequestResult.authority)
         return { gateway: paymentRequestResult, invoiceId: invoiceId, authority: paymentRequestResult.authority };
-
     }
 }
