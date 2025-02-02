@@ -3,6 +3,8 @@ namespace NodeJS {
         PORT: string;
         CALLBACK_URL: string;
 
+        MERCHANT_ID: string;
+
         SHEPA_URL: string;
         SHEPA_APIKEY: "sandbox";
 
