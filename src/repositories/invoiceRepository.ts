@@ -44,6 +44,26 @@ export class InvoiceRepository {
         return payment;
     }
 
+    getWaitingPaymentObjects(dataList: CreatePaymentData[]) {
+        const paymentObjects = dataList.map(data => {
+            const createPayload: Payment = {
+                amount: data.amount,
+                authority: data.authority,
+                description: data.authority,
+                gateway: data.gateway,
+                status: "waiting",
+            }; 
+            if(data.mobile) createPayload.mobile = data.mobile;
+            if(data.email) createPayload.email = data.email;
+    
+            const payment = new this.paymentModel(createPayload);
+    
+            return payment;  
+        });
+        
+        return paymentObjects;
+    }
+
     async createInvoice(data: CreateInvoice) {
         const createPayload: CreateInvoice & { isDone: boolean } = {
             title: data.title,
@@ -59,6 +79,14 @@ export class InvoiceRepository {
     }
     async findInvoiceById(invoiceId: string) {
         return await this.invoiceModel.findOne({ _id: invoiceId });
+    }
+    async addWaitingPayments(invoiceId: string, payments: CreatePaymentData[]) {
+        const paymentObjects = this.getWaitingPaymentObjects(payments);
+        return await this.invoiceModel.findOneAndUpdate(
+            { _id: invoiceId },
+            { $addToSet: { payments: paymentObjects } },
+            { returnDocument: "after" }
+        );
     }
 
     async addNewPayment(invoiceId: string, payment: CreatePaymentData) {
