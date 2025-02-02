@@ -27,5 +27,10 @@ export class AppController {
   async callback(@Query() query: any) {
     return await this.paymentService.handleCallback(query);
   }
+
+  @Post("payment/reverse")
+  async refundPayment(@Body() body: any) {
+    return this.paymentService.reverse(body);
+  }
 }
  
