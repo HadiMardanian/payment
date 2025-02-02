@@ -39,6 +39,12 @@ type CreateInvoiceBody = {
 };
 type GetInvoiceInfo = { invoiceId: string };
 
+type ReverseResponse = {
+    isOk: boolean;
+    result?: any;
+    errors: any[];
+}
+
 @Injectable()
 export class PaymentService {
     constructor(
@@ -97,7 +103,7 @@ export class PaymentService {
                 email
             })
 
-            return { gateway: result, invoice: updatedInvoice };
+            return { gateway: result, invoiceId: invoiceId, authority: result.authority };
         } catch(error) {
             throw new InternalServerErrorException(error?.message);
         }
@@ -137,5 +143,30 @@ export class PaymentService {
         }
 
         return { status: payment.status };
+    }
+
+    async reverse({ invoiceId, authority }: { authority: string, invoiceId: string }) {
+        const invoice = await this.invoiceRepository.findInvoiceById(invoiceId);
+        let payment: PaymentDocument | undefined;
+        if(
+            !invoice ||
+            !(payment = invoice.payments.find(p => p.authority === authority)) ||
+            payment.status !== "success" || 
+            (payment.gateway !== "shepa" && payment.gateway !== "zarinpal")
+        ) {
+            throw new NotFoundException("Payment not found");
+        }
+
+        let reverseResult: ReverseResponse | null = null;
+        if(payment.gateway === "zarinpal") {
+            reverseResult = await this.zarinpalService.reverse(authority);
+        } else if(payment.gateway === "shepa") {
+            reverseResult = await this.shepaService.reverse(payment.amount, -1);
+        }
+
+        if(reverseResult && reverseResult?.isOk) {
+            console.log(await this.invoiceRepository.makePaymentReversed(authority));
+        }
+        return reverseResult;
     }
 }
