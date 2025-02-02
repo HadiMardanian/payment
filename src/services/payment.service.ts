@@ -37,6 +37,14 @@ type CreateInvoiceBody = {
     mobile?: string;
     email?: string;
 };
+type CreateWaitingPaymentsData = {
+    gateway: GatewayType;
+    amount: number;
+    description: string;
+    mobile?: string;
+    authority: string;
+    email?: string;
+};
 type GetInvoiceInfo = { invoiceId: string };
 
 type ReverseResponse = {
@@ -69,8 +77,26 @@ export class PaymentService {
 
         return invoice;
     }
-    async paymentRequest({ invoiceId, amount, description, gateway, email, mobile }: PaymentRequestBody) {
+    private async createWaitingPayments(invoiceId: string, list: CreateWaitingPaymentsData[]) {
+        const result = await this.invoiceRepository.addWaitingPayments(invoiceId, list);
+        return result?.payments || [];
+    }
+    private calculateExtraPayments(amount: number) {
+        let extraAmounts: number[] = []
+        let remaining = amount % +process.env.MAX_PAYMENT_LIMIT
+        let remainingAmount = amount - remaining;
+
+        extraAmounts.push(
+            ...Array(remainingAmount / +process.env.MAX_PAYMENT_LIMIT).fill(+process.env.MAX_PAYMENT_LIMIT)
+        );
+        if(remaining) {
+            extraAmounts.push(remaining);
+        }
+        return extraAmounts
+    }
+    async paymentRequest({ invoiceId, amount: _amount_, description, gateway, email, mobile }: PaymentRequestBody) {
         try {
+            let amount = _amount_;
             const invoice = await this.invoiceRepository.findInvoiceById(invoiceId);
             if(!invoice) {
                 throw new NotFoundException("Invoice not found");
@@ -80,6 +106,23 @@ export class PaymentService {
                 .reduce((total, p) => total + p.amount, 0);
             if(donePaymentsAmount + amount > invoice.totalAmount) {
                 throw new BadRequestException("Invalid paymnt amount");
+            }
+
+            let waitingPayments: string[] = [];
+            //Checking for extra payments
+            if(amount > +process.env.MAX_PAYMENT_LIMIT) {
+                let waitingAmounts = this.calculateExtraPayments(amount - +process.env.MAX_PAYMENT_LIMIT);
+                let waitingPaymentObjects = waitingAmounts.map(amount => ({
+                    amount,
+                    description,
+                    authority: "",
+                    gateway,
+                    mobile,
+                    email
+                }))
+                let waitingPaymentsResult = await this.createWaitingPayments(invoiceId, waitingPaymentObjects)
+                waitingPayments = waitingPaymentsResult.map(p => p._id.toString());
+                amount = +process.env.MAX_PAYMENT_LIMIT;
             }
 
             let gw = gateway !== "shepa" && gateway !== "zarinpal" ? "shepa" : gateway;
@@ -103,7 +146,7 @@ export class PaymentService {
                 email
             })
 
-            return { gateway: result, invoiceId: invoiceId, authority: result.authority };
+            return { gateway: result, invoiceId: invoiceId, authority: result.authority, waitingPayments };
         } catch(error) {
             throw new InternalServerErrorException(error?.message);
         }
