@@ -21,8 +21,26 @@ export class Invoice {
     @Prop({ type: [Payment] })
     payments: PaymentDocument[];
 
-    @Prop({ required: true })
-    isDone: boolean;
+    @Prop()
+    isDone?: boolean;
+
+    @Prop()
+    readyToPayToken?: string;
+
+    @Prop()
+    userFullName?: string;
+
+    @Prop()
+    description?: string;
+
+    @Prop()
+    unlimitAmount?: boolean;
+
+    @Prop()
+    readyAmount?: number;
+
+    @Prop()
+    readyToPayGateway?: string;
 }
 
 export const InvoiceModel = SchemaFactory.createForClass(Invoice);
