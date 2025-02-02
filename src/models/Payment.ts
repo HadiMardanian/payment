@@ -23,8 +23,8 @@ export class Payment {
     @Prop()
     email?: string;
 
-    @Prop({ required: true, enum: ["pending", "failed", "success", "canceled", "reversed"] })
-    status: "pending" | "failed" | "success" | "canceled" | "reversed";
+    @Prop({ required: true, enum: ["pending", "failed", "success", "canceled", "reversed", "waiting"] })
+    status: "pending" | "failed" | "success" | "canceled" | "reversed" | "waiting";
 }
 
 export const PaymentModel = SchemaFactory.createForClass(Payment);
