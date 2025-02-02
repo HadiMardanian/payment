@@ -4,6 +4,7 @@ import { Model, Types } from "mongoose";
 import { Invoice } from 'src/models/Invoice';
 import { Payment } from 'src/models/Payment';
 
+type GatewayType = "zarinpal" | "shepa";
 type CreateInvoice = {
     title: string;
     totalAmount: number;
@@ -12,7 +13,7 @@ type CreateInvoice = {
 }
 
 type CreatePaymentData = {
-    gateway: "zarinpal" | "shepa";
+    gateway: GatewayType;
     authority: string;
     amount: number;
     description: string;
@@ -121,11 +122,14 @@ export class InvoiceRepository {
             }
         );
     }
-    async makePaymentPending(paymentId: string, authority: string) {
+    async makePaymentPending(paymentId: string, authority: string, gateway?: GatewayType) {
         const id = new Types.ObjectId(paymentId);
+        const setQuery = { "payments.$[payment].status": "pending", "payments.$[payment].authority": authority };
+        if(gateway) setQuery["payments.$[payment].gateway"] = gateway;
+
         return await this.invoiceModel.findOneAndUpdate(
             { $and: [ {"payments._id": id}, {"payments.status": "waiting"} ] },
-            { $set: { "payments.$[payment].status": "pending", "payments.$[payment].authority": authority } },
+            { $set: setQuery },
             {
                 arrayFilters: [{"payment._id": id, "payment.status": "waiting" }],
                 returnDocument: "after"

@@ -233,16 +233,17 @@ export class PaymentService {
         }
         return invoice.payments;
     }
-    async startWaitingPayment({ paymentId }: { paymentId: string }) {
+    async startWaitingPayment({ paymentId, gateway }: { paymentId: string, gateway?: GatewayType }) {
         const { payment, invoiceId } = await this.invoiceRepository.findPaymentById(paymentId);
         if (!payment || !invoiceId) {
             throw new NotFoundException("Payment not found");
         }
 
+        const finalGateway = gateway || payment.gateway;
         const paymentRequestResult = await this.sendPaymentRequestToGateway({
             amount: payment.amount,
             description: payment.description, 
-            gateway: payment.gateway, 
+            gateway: finalGateway, 
             email: payment.email, 
             mobile: payment.mobile,
         })
@@ -250,7 +251,7 @@ export class PaymentService {
             throw new Error("Payment request failed");
         }
 
-        await this.invoiceRepository.makePaymentPending(paymentId, paymentRequestResult.authority)
+        await this.invoiceRepository.makePaymentPending(paymentId, paymentRequestResult.authority, finalGateway);
         return { gateway: paymentRequestResult, invoiceId: invoiceId, authority: paymentRequestResult.authority };
     }
 }
