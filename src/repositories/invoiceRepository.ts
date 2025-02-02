@@ -75,16 +75,38 @@ export class InvoiceRepository {
     }
     async makePaymentSuccess(authority: string) {
         return await this.invoiceModel.findOneAndUpdate(
-            { $and: [ { "payments.authority": authority }, { "payments.status": "pending" } ] },
-            { "payments.$.status": "success" },
-            { returnDocument: "after" }
+            { "payments.authority": authority, "payments.status": "pending" },
+            { $set: { "payments.$[payment].status": "success" } },
+            {
+                arrayFilters: [{ "payment.authority": authority, "payment.status": "pending" }],
+                returnDocument: "after"
+            }
         );
     }
     async makePaymentFailed(authority: string) {
         return await this.invoiceModel.findOneAndUpdate(
-            { $and: [ { "payments.authority": authority }, { "payments.status": "pending" } ] },
-            { "payments.$.status": "failed" },
-            { returnDocument: "after" }
+            { "payments.authority": authority, "payments.status": "pending" },
+            { $set: { "payments.$[payment].status": "failed" } },
+            {
+                arrayFilters: [{ "payment.authority": authority, "payment.status": "pending" }],
+                returnDocument: "after"
+            }
         );
+    }
+    async makePaymentReversed(authority: string) {
+        return await this.invoiceModel.findOneAndUpdate(
+            { "payments.authority": authority, "payments.status": "success" },
+            { $set: { "payments.$[payment].status": "reversed" } },
+            {
+                arrayFilters: [{ "payment.authority": authority, "payment.status": "success" }],
+                returnDocument: "after"
+            }
+        );
+    }
+    async getSinglePaymentViaParent(invoiceId: string, authority: string) {
+        const invoice = await this.invoiceModel.findOne({
+            $and: [{ _id: invoiceId }, { "payments.authority": authority }]
+        });
+        return invoice?.payments[0];
     }
 }
