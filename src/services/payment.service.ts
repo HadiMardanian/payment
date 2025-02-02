@@ -28,6 +28,13 @@ type PaymentRequestBody = {
     mobile?: string;
     email?: string;
 }
+type SendPaymentRequest = {
+    gateway: GatewayType;
+    amount: number;
+    description: string;
+    mobile?: string;
+    email?: string;
+}
 
 type PaymentRequestResponse = { isOk: boolean, link?: string, authority?: string };
 
@@ -94,6 +101,20 @@ export class PaymentService {
         }
         return extraAmounts
     }
+
+    private async sendPaymentRequestToGateway({ amount, description, gateway, email, mobile }: SendPaymentRequest) {
+        let gw = gateway !== "shepa" && gateway !== "zarinpal" ? "shepa" : gateway;
+        let result: PaymentRequestResponse = { isOk: false };
+        if (gw === "shepa") {
+            result = await this.shepaService.init({ amount, description, email, mobile })
+        }
+        else if (gw === "zarinpal") {
+            result = await this.zarinpalService.init({ amount, description, email, mobile })
+        }
+        
+        return result;
+    }
+
     async paymentRequest({ invoiceId, amount: _amount_, description, gateway, email, mobile }: PaymentRequestBody) {
         try {
             let amount = _amount_;
@@ -125,28 +146,21 @@ export class PaymentService {
                 amount = +process.env.MAX_PAYMENT_LIMIT;
             }
 
-            let gw = gateway !== "shepa" && gateway !== "zarinpal" ? "shepa" : gateway;
-            let result: PaymentRequestResponse = { isOk: false };
-            if(gw === "shepa") {
-                result = await this.shepaService.init({ amount, description, email, mobile })
-            }
-            else if(gw === "zarinpal") {
-                result = await this.zarinpalService.init({ amount, description, email, mobile })
-            }
-            if(!result.isOk || !result.authority) {
+            const paymentRequestResult = await this.sendPaymentRequestToGateway({ amount, description, gateway, email, mobile })
+            if (!paymentRequestResult.isOk || !paymentRequestResult.authority) {
                 throw new Error("Payment request failed");
             }
-            
+
             const updatedInvoice = await this.invoiceRepository.addNewPayment(invoiceId, {
                 amount,
                 description,
-                authority: result.authority,
+                authority: paymentRequestResult.authority,
                 gateway,
                 mobile,
                 email
             })
 
-            return { gateway: result, invoiceId: invoiceId, authority: result.authority, waitingPayments };
+            return { gateway: paymentRequestResult, invoiceId: invoiceId, authority: paymentRequestResult.authority, waitingPayments };
         } catch(error) {
             throw new InternalServerErrorException(error?.message);
         }
@@ -164,7 +178,7 @@ export class PaymentService {
             // handle for zarin pal
             authority = query.Authority;
             isOk = query.Status === "OK";
-        } 
+        }
         else {
             throw new InternalServerErrorException("Unknown callback query");
         }
@@ -194,7 +208,7 @@ export class PaymentService {
         if(
             !invoice ||
             !(payment = invoice.payments.find(p => p.authority === authority)) ||
-            payment.status !== "success" || 
+            payment.status !== "success" ||
             (payment.gateway !== "shepa" && payment.gateway !== "zarinpal")
         ) {
             throw new NotFoundException("Payment not found");
@@ -218,5 +232,27 @@ export class PaymentService {
             throw new NotFoundException("Invoice not found");
         }
         return invoice.payments;
+    }
+    async startWaitingPayment({ paymentId }: { paymentId: string }) {
+        const { payment, invoiceId } = await this.invoiceRepository.findPaymentById(paymentId);
+        if (!payment || !invoiceId) {
+            throw new NotFoundException("Payment not found");
+        }
+
+        const paymentRequestResult = await this.sendPaymentRequestToGateway({
+            amount: payment.amount,
+            description: payment.description, 
+            gateway: payment.gateway, 
+            email: payment.email, 
+            mobile: payment.mobile,
+        })
+        if (!paymentRequestResult.isOk || !paymentRequestResult.authority) {
+            throw new Error("Payment request failed");
+        }
+
+        const result = await this.invoiceRepository.makePaymentPending(paymentId, paymentRequestResult.authority)
+        console.log(result);
+        return { gateway: paymentRequestResult, invoiceId: invoiceId, authority: paymentRequestResult.authority };
+
     }
 }

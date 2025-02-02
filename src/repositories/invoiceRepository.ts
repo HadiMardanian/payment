@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from "mongoose";
+import { Model, Types } from "mongoose";
 import { Invoice } from 'src/models/Invoice';
 import { Payment } from 'src/models/Payment';
 
@@ -32,7 +32,7 @@ export class InvoiceRepository {
         const createPayload: Payment = {
             amount: data.amount,
             authority: data.authority,
-            description: data.authority,
+            description: data.description,
             gateway: data.gateway,
             status: "pending",
         };
@@ -49,7 +49,7 @@ export class InvoiceRepository {
             const createPayload: Payment = {
                 amount: data.amount,
                 authority: data.authority,
-                description: data.authority,
+                description: data.description,
                 gateway: data.gateway,
                 status: "waiting",
             };
@@ -121,6 +121,17 @@ export class InvoiceRepository {
             }
         );
     }
+    async makePaymentPending(paymentId: string, authority: string) {
+        const id = new Types.ObjectId(paymentId);
+        return await this.invoiceModel.findOneAndUpdate(
+            { $and: [ {"payments._id": id}, {"payments.status": "waiting"} ] },
+            { $set: { "payments.$[payment].status": "pending", "payments.$[payment].authority": authority } },
+            {
+                arrayFilters: [{"payment._id": id, "payment.status": "waiting" }],
+                returnDocument: "after"
+            }
+        );
+    }
     async makePaymentReversed(authority: string) {
         return await this.invoiceModel.findOneAndUpdate(
             { "payments.authority": authority, "payments.status": "success" },
@@ -152,5 +163,13 @@ export class InvoiceRepository {
                 }
             },
         );
+    }
+    async findPaymentById(paymentId: string) {
+        const id = new Types.ObjectId(paymentId)
+        const result = await this.invoiceModel.findOne(
+            { "payments._id": id, "payments.status": "waiting" },
+            { payments: { $elemMatch: { _id: id, status: "waiting" } } }
+        );
+        return { invoiceId: result?._id.toHexString(), payment: result?.payments[0] };
     }
 }

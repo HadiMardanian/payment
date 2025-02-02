@@ -37,5 +37,10 @@ export class AppController {
   async getWaitingPayments(@Body() body: any) {
     return this.paymentService.getWaitingPayments(body);
   }
+  
+  @Post("payment/startWaiting")
+  async startWaitingPayment(@Body() body: any) {
+    return this.paymentService.startWaitingPayment(body);
+  }
 }
  
