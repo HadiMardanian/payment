@@ -1,4 +1,5 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AxiosError } from 'axios';
 import { randomUUID } from 'crypto';
 import ZarinPal from 'zarinpal-node-sdk';
 
@@ -25,6 +26,12 @@ type ZarinpalPaymentRequestBody = {
     callback_url: string,
     description: string
 };
+
+type ReverseResponse = {
+    isOk: boolean;
+    result?: any;
+    errors: any[];
+}
 
 @Injectable()
 export class ZarinpalService {
@@ -58,5 +65,23 @@ export class ZarinpalService {
     async getPaymentStatus(amount: number, authority: string) {
         const result = await this.gateway.verifications.verify({ amount, authority });
         return result;
+    }
+
+    async reverse(authority: string): Promise<ReverseResponse> {
+        try {
+            const result: { data: { code: number, message: string } } = await this.gateway.reversals.reverse({ authority });
+            if(result?.data?.code !== 100)
+                throw new Error("Payment reverse failed");
+
+            return { isOk: true, errors: [] };
+        } catch (error) {
+            let errors: any[] = [];
+            if(error instanceof AxiosError) {
+                errors.push(error.response?.data);
+            } else {
+                errors.push(error?.message);
+            }
+            return { isOk: false, errors };
+        }
     }
 }
