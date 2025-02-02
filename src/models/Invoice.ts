@@ -38,6 +38,9 @@ export class Invoice {
 
     @Prop()
     readyAmount?: number;
+
+    @Prop()
+    readyToPayGateway?: string;
 }
 
 export const InvoiceModel = SchemaFactory.createForClass(Invoice);

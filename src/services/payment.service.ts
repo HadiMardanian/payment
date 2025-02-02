@@ -118,7 +118,7 @@ export class PaymentService {
         else if (gw === "zarinpal") {
             result = await this.zarinpalService.init({ amount, description, email, mobile })
         }
-        
+
         return result;
     }
 
@@ -249,9 +249,9 @@ export class PaymentService {
         const finalGateway = gateway || payment.gateway;
         const paymentRequestResult = await this.sendPaymentRequestToGateway({
             amount: payment.amount,
-            description: payment.description, 
-            gateway: finalGateway, 
-            email: payment.email, 
+            description: payment.description,
+            gateway: finalGateway,
+            email: payment.email,
             mobile: payment.mobile,
         })
         if (!paymentRequestResult.isOk || !paymentRequestResult.authority) {
@@ -272,6 +272,67 @@ export class PaymentService {
             userFullName,
             description,
         });
-        return { readyToPayLink: process.env.READY_TO_PAY_LINK + `?token=${invoice.readyToPayToken}` };
+        return { 
+            token: invoice.readyToPayToken,
+            readyToPayLink: process.env.READY_TO_PAY_LINK + `?token=${invoice.readyToPayToken}`,
+        };
+    }
+
+    async handleReadyToPay({ token }: { token: string }) {
+        const invoice = await this.invoiceRepository.findInvoiceByReadyToPayToken(token);
+        if (!invoice) {
+            throw new NotFoundException("Invoice not found");
+        }
+
+        if (invoice.unlimitAmount) {
+            return "html content";
+        }
+
+        const donePaymentsAmount = invoice.payments
+            .filter(p => p.status === "success")
+            .reduce((total, p) => total + p.amount, 0);
+        if (donePaymentsAmount + invoice.readyAmount! > invoice.totalAmount) {
+            throw new BadRequestException("One time payment link");
+        }
+
+        let amount = invoice.readyAmount!;
+        let waitingPayments: string[] = [];
+        //Checking for extra payments
+        if (amount > +process.env.MAX_PAYMENT_LIMIT) {
+            let waitingAmounts = this.calculateExtraPayments(amount - +process.env.MAX_PAYMENT_LIMIT);
+            let waitingPaymentObjects = waitingAmounts.map(amount => ({
+                amount,
+                description: invoice.description!,
+                authority: "",
+                gateway: invoice.readyToPayGateway! as GatewayType,
+                mobile: invoice.mobile!,
+                email: invoice.email
+            }));
+            let waitingPaymentsResult = await this.createWaitingPayments(invoice._id.toString(), waitingPaymentObjects)
+            waitingPayments = waitingPaymentsResult.map(p => p._id.toString());
+            amount = +process.env.MAX_PAYMENT_LIMIT;
+        }
+
+        const paymentRequestResult = await this.sendPaymentRequestToGateway({ 
+            amount, 
+            description: invoice.description!,
+            gateway: invoice.readyToPayGateway! as GatewayType, 
+            email: invoice.email, 
+            mobile: invoice.mobile,
+        })
+        if (!paymentRequestResult.isOk || !paymentRequestResult.authority) {
+            throw new Error("Payment request failed");
+        }
+
+        const updatedInvoice = await this.invoiceRepository.addNewPayment(invoice._id.toString(), {
+            amount,
+            description: invoice.description!,
+            authority: paymentRequestResult.authority,
+            gateway: invoice.readyToPayGateway! as GatewayType,
+            mobile: invoice.mobile,
+            email: invoice.email,
+        });
+        
+        return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority, waitingPayments };
     }
 }

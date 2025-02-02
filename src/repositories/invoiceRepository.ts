@@ -24,6 +24,7 @@ type CreatePaymentData = {
 type CreateReadyToPay = {
     amount?: number;
     description?: string;
+    totalAmount?: number;
     userFullName: string;
     mobile: string;
     readyToPayGateway: GatewayType;
@@ -193,7 +194,7 @@ export class InvoiceRepository {
             title: "ReadyToPay",
             unlimitAmount,
             ...(typeof amount !== "undefined" ? { readyAmount: amount } : {}),
-            totalAmount: 0,
+            ...(typeof amount !== "undefined" ? { totalAmount: amount } : { totalAmount: 0 }),
             readyToPayToken: randomUUID(),
         });
         const createdInvoice = await invoice.save();

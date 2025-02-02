@@ -43,6 +43,11 @@ export class AppController {
     return this.paymentService.startWaitingPayment(body);
   }
 
+  @Get("payment/readyToPay")
+  async readyToPay(@Query() query: any) {
+    return this.paymentService.handleReadyToPay(query);
+  }
+
   @Post("admin/payment/getReadyToPayLink")
   async getReadyToPayLink(@Body() body: any) {
     return this.paymentService.getReadyToPayLink(body);
