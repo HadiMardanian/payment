@@ -186,13 +186,14 @@ export class InvoiceRepository {
         return { invoiceId: result?._id.toHexString(), payment: result?.payments[0] };
     }
 
-    async createReadyToPayInvoice({ unlimitAmount, mobile, userFullName, amount, description }: CreateReadyToPay) {
+    async createReadyToPayInvoice({ readyToPayGateway, unlimitAmount, mobile, userFullName, amount, description }: CreateReadyToPay) {
         const invoice = new this.invoiceModel({
             mobile, 
             userFullName,
             description,
             title: "ReadyToPay",
             unlimitAmount,
+            readyToPayGateway,
             ...(typeof amount !== "undefined" ? { readyAmount: amount } : {}),
             ...(typeof amount !== "undefined" ? { totalAmount: amount } : { totalAmount: 0 }),
             readyToPayToken: randomUUID(),

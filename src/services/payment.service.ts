@@ -176,6 +176,8 @@ export class PaymentService {
     async handleCallback(query: CallbackQuery) {
         let authority: string;
         let isOk: boolean;
+        let text = "Your payment have been successfuly done";
+        let title = "Everything is good";
         if(IsShepaQuery(query)) {
             // handle for shepa
             authority = query.token;
@@ -187,16 +189,21 @@ export class PaymentService {
             isOk = query.Status === "OK";
         }
         else {
-            throw new InternalServerErrorException("Unknown callback query");
+            text = "Your payment have been failed";
+            title = "Something went wrong with your payment";
+            return { status: "error", title, text };
         }
 
         if(isOk) {
             await this.invoiceRepository.makePaymentSuccess(authority);
         } else {
             await this.invoiceRepository.makePaymentFailed(authority);
+
+            text = "Your payment have been failed";
+            title = "Something went wrong with your payment";
         };
 
-        return { isOk };
+        return { status: isOk ? "ok" : "error", title, text };
     }
 
     async paymentStatus({ paymentId, invoiceId } : { paymentId: string, invoiceId: string }) {
@@ -264,28 +271,66 @@ export class PaymentService {
 
     async getReadyToPayLink({ mobile, userFullName, amount, description, readyToPayGateway}: GetReadyToPayLinkBody) {
         const gateway = readyToPayGateway || process.env.DEFAULT_GATEWAY;
+        const isDynamic = typeof amount === "undefined";
         const invoice = await this.invoiceRepository.createReadyToPayInvoice({
             mobile,
             readyToPayGateway: gateway,
-            unlimitAmount: typeof amount === "undefined",
+            unlimitAmount: isDynamic,
             amount,
             userFullName,
             description,
         });
         return { 
             token: invoice.readyToPayToken,
-            readyToPayLink: process.env.READY_TO_PAY_LINK + `?token=${invoice.readyToPayToken}`,
+            readyToPayLink: (
+                isDynamic ? process.env.READY_TO_PAY_DYNAMIC_LINK : 
+                            process.env.READY_TO_PAY_LINK
+            ) + `?token=${invoice.readyToPayToken}`,
         };
+    }
+
+    async handleReadyToPayDynamic({ token, amount, description, email }: { token: string, amount: number, email?: string, description?: string }) {
+        const invoice = await this.invoiceRepository.findInvoiceByReadyToPayToken(token);
+        if (!invoice || !invoice.unlimitAmount) {
+            throw new NotFoundException("Invoice not found");
+        }
+
+        const paymentRequestResult = await this.sendPaymentRequestToGateway({ 
+            amount, 
+            description: description || invoice.description!,
+            gateway: invoice.readyToPayGateway! as GatewayType, 
+            email: email || invoice.email, 
+            mobile: invoice.mobile,
+        })
+        if (!paymentRequestResult.isOk || !paymentRequestResult.authority) {
+            throw new Error("Payment request failed");
+        }
+
+        const updatedInvoice = await this.invoiceRepository.addNewPayment(invoice._id.toString(), {
+            amount,
+            description: invoice.description!,
+            authority: paymentRequestResult.authority,
+            gateway: invoice.readyToPayGateway! as GatewayType,
+            mobile: invoice.mobile,
+            email: invoice.email,
+        });
+        
+        return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority };
+    }
+
+    async readyToPayDynamicPage({ token }: { token: string }) {
+        const invoice = await this.invoiceRepository.findInvoiceByReadyToPayToken(token);
+        if (!invoice || !invoice.unlimitAmount) {
+            throw new NotFoundException("Invoice not found");
+        }
+
+        return { token, title: invoice.title, baseUrl: process.env.READY_TO_PAY_DYNAMIC_LINK! }
     }
 
     async handleReadyToPay({ token }: { token: string }) {
         const invoice = await this.invoiceRepository.findInvoiceByReadyToPayToken(token);
-        if (!invoice) {
+        if (!invoice || invoice.unlimitAmount) {
             throw new NotFoundException("Invoice not found");
-        }
-
-        if (invoice.unlimitAmount) {
-            return "html content";
         }
 
         const donePaymentsAmount = invoice.payments
