@@ -35,7 +35,7 @@ export class InvoiceRepository {
             description: data.authority,
             gateway: data.gateway,
             status: "pending",
-        }; 
+        };
         if(data.mobile) createPayload.mobile = data.mobile;
         if(data.email) createPayload.email = data.email;
 
@@ -52,15 +52,15 @@ export class InvoiceRepository {
                 description: data.authority,
                 gateway: data.gateway,
                 status: "waiting",
-            }; 
+            };
             if(data.mobile) createPayload.mobile = data.mobile;
             if(data.email) createPayload.email = data.email;
-    
+
             const payment = new this.paymentModel(createPayload);
-    
-            return payment;  
+
+            return payment;
         });
-        
+
         return paymentObjects;
     }
 
@@ -136,5 +136,21 @@ export class InvoiceRepository {
             $and: [{ _id: invoiceId }, { "payments.authority": authority }]
         });
         return invoice?.payments[0];
+    }
+    async getInvoiceWithWaitingPaymentsById(invoiceId: string) {
+        return await this.invoiceModel.findOne(
+            { _id: invoiceId },
+            { 
+                payments: {
+                    $filter: {
+                        input: "$payments",
+                        as: "payments",
+                        cond: {
+                            $eq: ["$$payments.status", "waiting"]
+                        }
+                    }
+                }
+            },
+        );
     }
 }

@@ -32,5 +32,10 @@ export class AppController {
   async refundPayment(@Body() body: any) {
     return this.paymentService.reverse(body);
   }
+
+  @Post("invoice/getWaitingPayments")
+  async getWaitingPayments(@Body() body: any) {
+    return this.paymentService.getWaitingPayments(body);
+  }
 }
  

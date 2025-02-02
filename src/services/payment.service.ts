@@ -212,4 +212,11 @@ export class PaymentService {
         }
         return reverseResult;
     }
+    async getWaitingPayments({ invoiceId }: { invoiceId: string }) {
+        const invoice = await this.invoiceRepository.getInvoiceWithWaitingPaymentsById(invoiceId);
+        if(!invoice) {
+            throw new NotFoundException("Invoice not found");
+        }
+        return invoice.payments;
+    }
 }
