@@ -59,6 +59,13 @@ type ReverseResponse = {
     result?: any;
     errors: any[];
 }
+type GetReadyToPayLinkBody = {
+    amount?: number;
+    description?: string;
+    userFullName: string;
+    mobile: string;
+    readyToPayGateway?: GatewayType;
+};
 
 @Injectable()
 export class PaymentService {
@@ -253,5 +260,18 @@ export class PaymentService {
 
         await this.invoiceRepository.makePaymentPending(paymentId, paymentRequestResult.authority, finalGateway);
         return { gateway: paymentRequestResult, invoiceId: invoiceId, authority: paymentRequestResult.authority };
+    }
+
+    async getReadyToPayLink({ mobile, userFullName, amount, description, readyToPayGateway}: GetReadyToPayLinkBody) {
+        const gateway = readyToPayGateway || process.env.DEFAULT_GATEWAY;
+        const invoice = await this.invoiceRepository.createReadyToPayInvoice({
+            mobile,
+            readyToPayGateway: gateway,
+            unlimitAmount: typeof amount === "undefined",
+            amount,
+            userFullName,
+            description,
+        });
+        return { readyToPayLink: process.env.READY_TO_PAY_LINK + `?token=${invoice.readyToPayToken}` };
     }
 }

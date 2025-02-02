@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { randomUUID } from 'crypto';
 import { Model, Types } from "mongoose";
 import { Invoice } from 'src/models/Invoice';
 import { Payment } from 'src/models/Payment';
@@ -20,7 +21,14 @@ type CreatePaymentData = {
     mobile?: string;
     email?: string;
 }
-
+type CreateReadyToPay = {
+    amount?: number;
+    description?: string;
+    userFullName: string;
+    mobile: string;
+    readyToPayGateway: GatewayType;
+    unlimitAmount: boolean;
+};
 @Injectable()
 export class InvoiceRepository {
     constructor(
@@ -175,5 +183,25 @@ export class InvoiceRepository {
             { payments: { $elemMatch: { _id: id, status: "waiting" } } }
         );
         return { invoiceId: result?._id.toHexString(), payment: result?.payments[0] };
+    }
+
+    async createReadyToPayInvoice({ unlimitAmount, mobile, userFullName, amount, description }: CreateReadyToPay) {
+        const invoice = new this.invoiceModel({
+            mobile, 
+            userFullName,
+            description,
+            title: "ReadyToPay",
+            unlimitAmount,
+            ...(typeof amount !== "undefined" ? { readyAmount: amount } : {}),
+            totalAmount: 0,
+            readyToPayToken: randomUUID(),
+        });
+        const createdInvoice = await invoice.save();
+
+        return createdInvoice;
+    }
+
+    async findInvoiceByReadyToPayToken(token: string) {
+        return await this.invoiceModel.findOne({ readyToPayToken: token });
     }
 }
