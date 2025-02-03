@@ -6,7 +6,7 @@ export type PaymentDocument = HydratedDocument<Payment>;
 @Schema({ timestamps: { createdAt: true, updatedAt: true } })
 export class Payment {
     @Prop({ required: true })
-    gateway: "zarinpal" | "shepa";
+    gateway: "zarinpal" | "shepa" | "zibal";
 
     @Prop({ required: true })
     authority: string;

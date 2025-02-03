@@ -5,7 +5,7 @@ import { Model, Types } from "mongoose";
 import { Invoice } from 'src/models/Invoice';
 import { Payment } from 'src/models/Payment';
 
-type GatewayType = "zarinpal" | "shepa";
+type GatewayType = "zarinpal" | "shepa" | "zibal";
 type CreateInvoice = {
     title: string;
     totalAmount: number;

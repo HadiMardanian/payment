@@ -3,6 +3,7 @@ import { ShepaService } from './shepa.service';
 import { ZarinpalService } from './zarinpal.service';
 import { InvoiceRepository } from 'src/repositories/invoiceRepository';
 import { PaymentDocument } from 'src/models/Payment';
+import { ZibalService } from './zibal.service';
 
 type ShepaQuery = {
     status: "success" | "failed";
@@ -14,11 +15,38 @@ type ZarinpalQuery = {
     Status: "OK" | "NOK"
 }
 
-type CallbackQuery = ZarinpalQuery | ShepaQuery;
+enum ZinalCallbackStatus {
+    pending = "-1",
+    internal_error = "-2",
+    paied_approved = "1",
+    paied_not_approved = "2",
+    canceled = "3",
+    invalid_card_number = "4",
+    not_enough_credit = "5",
+    wront_password = "6",
+    request_ratelimit = "7",
+    payment_request_perday_ratelimit = "8",
+    payment_amount_perday_ratelimit = "9",
+    card_invalid = "10",
+    switch_error = "11",
+    card_not_avalible = "12",
+    transaction_refund = "15",
+    transaction_redunding = "16",
+    transction_reversed = "18",
+}
+type ZibalQuery = {
+    success: "1" | "0";
+    trackId: string | number;
+    orderId: string;
+    status: ZinalCallbackStatus;
+}
+
+type CallbackQuery = ZarinpalQuery | ShepaQuery | ZibalQuery;
 const IsZarinpalQuery = (query: any): query is ZarinpalQuery => (query.Authority && query.Status);
 const IsShepaQuery = (query: any): query is ShepaQuery => (query.status && query.token);
+const IsZibalQuery = (query: any): query is ZibalQuery => (query.status && query.trackId && query.success);
 
-type GatewayType = "zarinpal" | "shepa";
+type GatewayType = "zarinpal" | "shepa" | "zibal";
 
 type PaymentRequestBody = {
     invoiceId: string;
@@ -72,6 +100,7 @@ export class PaymentService {
     constructor(
         private readonly shepaService: ShepaService,
         private readonly zarinpalService: ZarinpalService,
+        private readonly zibalService: ZibalService,
         private readonly invoiceRepository: InvoiceRepository,
     ){}
     async createInvoice(data: CreateInvoiceBody) {
@@ -110,13 +139,16 @@ export class PaymentService {
     }
 
     private async sendPaymentRequestToGateway({ amount, description, gateway, email, mobile }: SendPaymentRequest) {
-        let gw = gateway !== "shepa" && gateway !== "zarinpal" ? "shepa" : gateway;
+        let gw = !gateway ? process.env.DEFAULT_GATEWAY : gateway;
         let result: PaymentRequestResponse = { isOk: false };
         if (gw === "shepa") {
             result = await this.shepaService.init({ amount, description, email, mobile })
         }
         else if (gw === "zarinpal") {
             result = await this.zarinpalService.init({ amount, description, email, mobile })
+        } 
+        else if(gw === "zibal") {
+            result = await this.zibalService.init({ amount, description, email, mobile });
         }
 
         return result;
@@ -178,18 +210,20 @@ export class PaymentService {
         let isOk: boolean = false;
         let text = "Your payment have been successfuly done";
         let title = "Everything is good";
-        let gateway;
+        let gateway: GatewayType;
         if(IsShepaQuery(query)) {
-            // handle for shepa
             authority = query.token;
             isOk = query.status === "success";
             gateway = "shepa";
         }
         else if(IsZarinpalQuery(query)) {
-            // handle for zarin pal
             authority = query.Authority;
             isOk = query.Status === "OK";
             gateway = "zarinpal";
+        } else if(IsZibalQuery(query)) {
+            authority = query.trackId.toString();
+            isOk = query.success === "1" && query.status === ZinalCallbackStatus.paied_not_approved;
+            gateway = "zibal";
         }
         else {
             text = "Your payment have been failed";
@@ -222,10 +256,7 @@ export class PaymentService {
                 await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), result.cardNumber);
             }
 
-            return;
-        }
-
-        if(gateway === "zarinpal") {
+        } else if(gateway === "zarinpal") {
             const { payment } = await this.invoiceRepository.findPaymentByAuthority(authority);
             if(!payment) return;
 
@@ -234,6 +265,17 @@ export class PaymentService {
 
             if(result) {
                 await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), result.card_pan);
+            }
+            
+        } else if(gateway === "zibal") {
+            const { payment } = await this.invoiceRepository.findPaymentByAuthority(authority);
+            if(!payment) return;
+
+            const result = await this.zibalService.verify(Number(authority));
+            console.log(result);
+
+            if(result) {
+                await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), String(result.cardNumber));
             }
         }
     }

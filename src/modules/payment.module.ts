@@ -7,6 +7,7 @@ import { InvoiceRepository } from 'src/repositories/invoiceRepository';
 import { PaymentService } from 'src/services/payment.service';
 import { ShepaService } from 'src/services/shepa.service';
 import { ZarinpalService } from 'src/services/zarinpal.service';
+import { ZibalService } from 'src/services/zibal.service';
 
 @Module({
     imports: [
@@ -19,6 +20,7 @@ import { ZarinpalService } from 'src/services/zarinpal.service';
         PaymentService,
         ShepaService,
         ZarinpalService,
+        ZibalService,
         InvoiceRepository,
     ],
     controllers: [AppController]

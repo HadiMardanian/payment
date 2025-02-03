@@ -1,12 +1,12 @@
 import { IsEmail, IsIn, IsInt, IsMobilePhone, IsMongoId, IsOptional, IsString, Min } from "@nestjs/class-validator";
 
-type GatewayType = "zarinpal" | "shepa";
+type GatewayType = "zarinpal" | "shepa" | "zibal";
 
 export class PaymentRequest {
     @IsMongoId()
     invoiceId: string;
     
-    @IsIn(["zarinpal", "shepa"])
+    @IsIn(["zarinpal", "shepa", "zibal"])
     gateway: GatewayType;
 
     @IsInt()

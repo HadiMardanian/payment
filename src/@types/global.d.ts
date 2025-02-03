@@ -15,6 +15,9 @@ namespace NodeJS {
         ZARINPAL_URL: string;
         ZARINPAL_TOKEN: string;
 
+        ZIBAL_MERCHANT_ID: string;
+        ZIBAL_BASE_URL: string;
+
         MONGO_CONNECTION_STRING: string;
     }
 }

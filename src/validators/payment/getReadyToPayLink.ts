@@ -1,6 +1,6 @@
 import { IsIn, IsInt, IsMobilePhone, IsOptional, IsString, Min } from "@nestjs/class-validator";
 
-type GatewayType = "zarinpal" | "shepa";
+type GatewayType = "zarinpal" | "shepa" | "zibal";
 
 export class GetReadyToPayLink {
     @IsInt()
@@ -17,6 +17,6 @@ export class GetReadyToPayLink {
     @IsMobilePhone()
     mobile: string;
 
-    @IsIn(["zarinpal", "shepa"])
+    @IsIn(["zarinpal", "shepa", "zibal"])
     readyToPayGateway?: GatewayType;
 }
