@@ -24,7 +24,7 @@
           <input type="hidden" name="token" value="<%=token%>" />
 
           <label for="email">Email:</label>
-          <input type="email" id="email" name="email" placeholder="Your Email">
+          <input type="email" id="email" name="email" placeholder="Your Email" required>
       
           <label for="amount">Enter your Amount below:</label>
           <input type="number" id="amount" name="amount" placeholder="Amount in Rial" min="1000">
@@ -46,7 +46,7 @@
 
         fetch("<%=baseUrl%>/process", {
             method: "POST",
-            body: JSON.stringify(fields),
+            body: JSON.stringify({...fields, amount: +fields.amount}),
             headers: { "Content-Type": "application/json", "Accept": "application/json" }
         }).then(data => data.json())
             .then(json => {
