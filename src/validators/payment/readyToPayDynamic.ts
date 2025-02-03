@@ -1,6 +1,11 @@
 import { IsString } from "@nestjs/class-validator";
+import { ApiProperty } from "@nestjs/swagger";
 
 export class ReadyToPayDynamic {
-    @IsString()
-    token: string;
+  @ApiProperty({
+    description: 'The token associated with the payment',
+    example: 'abc123xyz456',
+  })
+  @IsString()
+  token: string;
 }
