@@ -41,6 +41,7 @@ export class ShepaService {
             const authority = result.split("/").pop();
             return { isOk: true, link: String(result), authority };
         } catch (error) {
+            console.error(error);
             return { isOk: false };
         }
     }
