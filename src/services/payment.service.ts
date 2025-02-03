@@ -4,6 +4,7 @@ import { ZarinpalService } from './zarinpal.service';
 import { InvoiceRepository } from 'src/repositories/invoiceRepository';
 import { PaymentDocument } from 'src/models/Payment';
 import { ZibalService } from './zibal.service';
+import { Invoice } from 'src/models/Invoice';
 
 type ShepaQuery = {
     status: "success" | "failed";
@@ -88,6 +89,7 @@ type ReverseResponse = {
     errors: any[];
 }
 type GetReadyToPayLinkBody = {
+    invoiceId?: string;
     amount?: number;
     description?: string;
     userFullName: string;
@@ -140,6 +142,7 @@ export class PaymentService {
 
     private async sendPaymentRequestToGateway({ amount, description, gateway, email, mobile }: SendPaymentRequest) {
         let gw = !gateway ? process.env.DEFAULT_GATEWAY : gateway;
+        console.log({ amount, description, email, mobile });
         let result: PaymentRequestResponse = { isOk: false };
         if (gw === "shepa") {
             result = await this.shepaService.init({ amount, description, email, mobile })
@@ -150,7 +153,7 @@ export class PaymentService {
         else if(gw === "zibal") {
             result = await this.zibalService.init({ amount, description, email, mobile });
         }
-
+        
         return result;
     }
 
@@ -343,22 +346,33 @@ export class PaymentService {
         return { gateway: paymentRequestResult, invoiceId: invoiceId, authority: paymentRequestResult.authority };
     }
 
-    async getReadyToPayLink({ mobile, userFullName, amount, description, readyToPayGateway}: GetReadyToPayLinkBody) {
+    async getReadyToPayLink({ invoiceId, mobile, userFullName, amount, description, readyToPayGateway}: GetReadyToPayLinkBody) {
         const gateway = readyToPayGateway || process.env.DEFAULT_GATEWAY;
         const isDynamic = typeof amount === "undefined";
-        const invoice = await this.invoiceRepository.createReadyToPayInvoice({
-            mobile,
-            readyToPayGateway: gateway,
-            unlimitAmount: isDynamic,
-            amount,
-            userFullName,
-            description,
-        });
+        const isExtension = typeof amount !== "undefined" && typeof invoiceId !== "undefined";
+        let invoice: Invoice | null = null;
+        if(!invoiceId) {
+            invoice = await this.invoiceRepository.createReadyToPayInvoice({
+                mobile,
+                readyToPayGateway: gateway,
+                unlimitAmount: isDynamic,
+                amount,
+                userFullName,
+                description,
+            });
+        } else if(invoiceId && amount) {
+            invoice = await this.invoiceRepository.extendInvoiceAmount(invoiceId, amount, gateway);
+        }
+        if(!invoice) {
+            throw new InternalServerErrorException("Operation failed");
+        }
+
         return { 
             token: invoice.readyToPayToken,
             readyToPayLink: (
                 isDynamic ? process.env.READY_TO_PAY_DYNAMIC_LINK : 
-                            process.env.READY_TO_PAY_LINK
+                isExtension ? process.env.INVOICE_EXTENSION_LINK :
+                              process.env.READY_TO_PAY_LINK
             ) + `?token=${invoice.readyToPayToken}`,
         };
     }
@@ -399,6 +413,43 @@ export class PaymentService {
         }
 
         return { token, title: invoice.title, baseUrl: process.env.READY_TO_PAY_DYNAMIC_LINK! }
+    }
+
+    async handleInvoiceAmountExtension({ token }: { token: string }) {
+        const invoice = await this.invoiceRepository.findInvoiceByReadyToPayToken(token);
+        if (!invoice || invoice.unlimitAmount) {
+            throw new NotFoundException("Invoice not found");
+        }
+
+        const donePaymentsAmount = invoice.payments
+            .filter(p => p.status === "success")
+            .reduce((total, p) => total + p.amount, 0);
+        if (donePaymentsAmount + invoice.readyAmount! > invoice.totalAmount) {
+            throw new BadRequestException("One time payment link");
+        }
+
+        const paymentRequestResult = await this.sendPaymentRequestToGateway({ 
+            amount: invoice.readyAmount!, 
+            description: invoice.description || "Invoice amount extension",
+            gateway: invoice.readyToPayGateway! as GatewayType, 
+            email: invoice.email, 
+            mobile: invoice.mobile,
+        })
+        if (!paymentRequestResult.isOk || !paymentRequestResult.authority) {
+            throw new Error("Payment request failed");
+        }
+
+        const updatedInvoice = await this.invoiceRepository.addNewPayment(invoice._id.toString(), {
+            amount: invoice.readyAmount!,
+            description: invoice.description!,
+            authority: paymentRequestResult.authority,
+            gateway: invoice.readyToPayGateway! as GatewayType,
+            mobile: invoice.mobile,
+            email: invoice.email,
+        });
+        
+        return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority };
+
     }
 
     async handleReadyToPay({ token }: { token: string }) {

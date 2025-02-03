@@ -238,4 +238,22 @@ export class InvoiceRepository {
             }
         );
     }
+
+    async extendInvoiceAmount(invoiceId: string, newAmount: number, gateway: GatewayType) {
+        return await this.invoiceModel.findOneAndUpdate(
+            { _id: invoiceId },
+            [
+                {
+                    $set: {
+                        previousTotalAmount: "$totalAmount",
+                        totalAmount: { $add: ["$totalAmount", newAmount] },
+                        readyToPayGateway: gateway,
+                        readyAmount: newAmount,
+                        readyToPayToken: randomUUID(),
+                    }
+                }
+            ],
+            { returnDocument: "after" }
+        ).lean<Invoice>();
+    }
 }

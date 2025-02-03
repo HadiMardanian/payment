@@ -71,6 +71,12 @@ export class AppController {
     return this.paymentService.handleReadyToPay(query);
   }
 
+  @ApiTags("Invoice")
+  @Get("invoice/amountExtensionReadyToPay")
+  async invoiceAmountExtension(@Query() query: any) {
+    return this.paymentService.handleInvoiceAmountExtension(query);
+  }
+
   @Render("readyToPayDynamic")
   @Get("payment/readyToPayDynamic")
   async readyToPayDynamic(@Query() query: ReadyToPayDynamic) {

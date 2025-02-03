@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsMobilePhone, IsOptional, IsString, Min } from "@nestjs/class-validator";
+import { IsIn, IsInt, IsMobilePhone, IsMongoId, IsOptional, IsString } from "@nestjs/class-validator";
 
 type GatewayType = "zarinpal" | "shepa" | "zibal";
 
@@ -9,7 +9,7 @@ export class GetReadyToPayLink {
 
     @IsString()
     @IsOptional()
-    description?: string;
+    description: string;
 
     @IsString()
     userFullName: string;
@@ -19,4 +19,8 @@ export class GetReadyToPayLink {
 
     @IsIn(["zarinpal", "shepa", "zibal"])
     readyToPayGateway?: GatewayType;
+
+    @IsMongoId()
+    @IsOptional()
+    invoiceId?: string;
 }

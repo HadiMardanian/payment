@@ -13,6 +13,9 @@ export class Invoice {
     totalAmount: number;
 
     @Prop()
+    previousTotalAmount?: number;
+
+    @Prop()
     mobile?: string;
 
     @Prop()
