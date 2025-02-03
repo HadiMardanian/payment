@@ -6,7 +6,7 @@ export type PaymentDocument = HydratedDocument<Payment>;
 @Schema({ timestamps: { createdAt: true, updatedAt: true } })
 export class Payment {
     @Prop({ required: true })
-    gateway: "zarinpal" | "shepa";
+    gateway: "zarinpal" | "shepa" | "zibal";
 
     @Prop({ required: true })
     authority: string;
@@ -25,6 +25,12 @@ export class Payment {
 
     @Prop({ required: true, enum: ["pending", "failed", "success", "canceled", "reversed", "waiting"] })
     status: "pending" | "failed" | "success" | "canceled" | "reversed" | "waiting";
+
+    @Prop()
+    paymentFinalizedDate?: Date;
+
+    @Prop()
+    cardNumber?: string
 }
 
 export const PaymentModel = SchemaFactory.createForClass(Payment);

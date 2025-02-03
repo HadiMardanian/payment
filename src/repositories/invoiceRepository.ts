@@ -5,7 +5,7 @@ import { Model, Types } from "mongoose";
 import { Invoice } from 'src/models/Invoice';
 import { Payment } from 'src/models/Payment';
 
-type GatewayType = "zarinpal" | "shepa";
+type GatewayType = "zarinpal" | "shepa" | "zibal";
 type CreateInvoice = {
     title: string;
     totalAmount: number;
@@ -114,7 +114,12 @@ export class InvoiceRepository {
     async makePaymentSuccess(authority: string) {
         return await this.invoiceModel.findOneAndUpdate(
             { "payments.authority": authority, "payments.status": "pending" },
-            { $set: { "payments.$[payment].status": "success" } },
+            { 
+                $set: { 
+                    "payments.$[payment].status": "success",
+                    "payments.$[payment].paymentFinalizedDate": new Date(),
+                }
+            },
             {
                 arrayFilters: [{ "payment.authority": authority, "payment.status": "pending" }],
                 returnDocument: "after"
@@ -124,7 +129,12 @@ export class InvoiceRepository {
     async makePaymentFailed(authority: string) {
         return await this.invoiceModel.findOneAndUpdate(
             { "payments.authority": authority, "payments.status": "pending" },
-            { $set: { "payments.$[payment].status": "failed" } },
+            { 
+                $set: { 
+                    "payments.$[payment].status": "failed",
+                    "payments.$[payment].paymentFinalizedDate": new Date(),
+                } 
+            },
             {
                 arrayFilters: [{ "payment.authority": authority, "payment.status": "pending" }],
                 returnDocument: "after"
@@ -185,7 +195,13 @@ export class InvoiceRepository {
         );
         return { invoiceId: result?._id.toHexString(), payment: result?.payments[0] };
     }
-
+    async findPaymentByAuthority(authority: string) {
+        const result = await this.invoiceModel.findOne(
+            { "payments.authority": authority },
+            { payments: { $elemMatch: { authority: authority } } }
+        );
+        return { invoiceId: result?._id.toHexString(), payment: result?.payments[0] };
+    }
     async createReadyToPayInvoice({ readyToPayGateway, unlimitAmount, mobile, userFullName, amount, description }: CreateReadyToPay) {
         const invoice = new this.invoiceModel({
             mobile, 
@@ -205,5 +221,39 @@ export class InvoiceRepository {
 
     async findInvoiceByReadyToPayToken(token: string) {
         return await this.invoiceModel.findOne({ readyToPayToken: token });
+    }
+
+    async getAllPayments() {
+        return await this.invoiceModel.find({}).lean();
+    }
+
+    async updatePaymentCardNumber(paymentId: string, cardNumber: string) {
+        const id = new Types.ObjectId(paymentId);
+        return await this.invoiceModel.findOneAndUpdate(
+            { "payments._id": id },
+            { $set: { "payments.$[payment].cardNumber": cardNumber } },
+            {
+                arrayFilters: [{ "payment._id": id }],
+                returnDocument: "after"
+            }
+        );
+    }
+
+    async extendInvoiceAmount(invoiceId: string, newAmount: number, gateway: GatewayType) {
+        return await this.invoiceModel.findOneAndUpdate(
+            { _id: invoiceId },
+            [
+                {
+                    $set: {
+                        previousTotalAmount: "$totalAmount",
+                        totalAmount: { $add: ["$totalAmount", newAmount] },
+                        readyToPayGateway: gateway,
+                        readyAmount: newAmount,
+                        readyToPayToken: randomUUID(),
+                    }
+                }
+            ],
+            { returnDocument: "after" }
+        ).lean<Invoice>();
     }
 }

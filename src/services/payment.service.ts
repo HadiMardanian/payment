@@ -3,6 +3,8 @@ import { ShepaService } from './shepa.service';
 import { ZarinpalService } from './zarinpal.service';
 import { InvoiceRepository } from 'src/repositories/invoiceRepository';
 import { PaymentDocument } from 'src/models/Payment';
+import { ZibalService } from './zibal.service';
+import { Invoice } from 'src/models/Invoice';
 
 type ShepaQuery = {
     status: "success" | "failed";
@@ -14,11 +16,38 @@ type ZarinpalQuery = {
     Status: "OK" | "NOK"
 }
 
-type CallbackQuery = ZarinpalQuery | ShepaQuery;
+enum ZinalCallbackStatus {
+    pending = "-1",
+    internal_error = "-2",
+    paied_approved = "1",
+    paied_not_approved = "2",
+    canceled = "3",
+    invalid_card_number = "4",
+    not_enough_credit = "5",
+    wront_password = "6",
+    request_ratelimit = "7",
+    payment_request_perday_ratelimit = "8",
+    payment_amount_perday_ratelimit = "9",
+    card_invalid = "10",
+    switch_error = "11",
+    card_not_avalible = "12",
+    transaction_refund = "15",
+    transaction_redunding = "16",
+    transction_reversed = "18",
+}
+type ZibalQuery = {
+    success: "1" | "0";
+    trackId: string | number;
+    orderId: string;
+    status: ZinalCallbackStatus;
+}
+
+type CallbackQuery = ZarinpalQuery | ShepaQuery | ZibalQuery;
 const IsZarinpalQuery = (query: any): query is ZarinpalQuery => (query.Authority && query.Status);
 const IsShepaQuery = (query: any): query is ShepaQuery => (query.status && query.token);
+const IsZibalQuery = (query: any): query is ZibalQuery => (query.status && query.trackId && query.success);
 
-type GatewayType = "zarinpal" | "shepa";
+type GatewayType = "zarinpal" | "shepa" | "zibal";
 
 type PaymentRequestBody = {
     invoiceId: string;
@@ -60,6 +89,7 @@ type ReverseResponse = {
     errors: any[];
 }
 type GetReadyToPayLinkBody = {
+    invoiceId?: string;
     amount?: number;
     description?: string;
     userFullName: string;
@@ -72,6 +102,7 @@ export class PaymentService {
     constructor(
         private readonly shepaService: ShepaService,
         private readonly zarinpalService: ZarinpalService,
+        private readonly zibalService: ZibalService,
         private readonly invoiceRepository: InvoiceRepository,
     ){}
     async createInvoice(data: CreateInvoiceBody) {
@@ -110,15 +141,19 @@ export class PaymentService {
     }
 
     private async sendPaymentRequestToGateway({ amount, description, gateway, email, mobile }: SendPaymentRequest) {
-        let gw = gateway !== "shepa" && gateway !== "zarinpal" ? "shepa" : gateway;
+        let gw = !gateway ? process.env.DEFAULT_GATEWAY : gateway;
+        console.log({ amount, description, email, mobile });
         let result: PaymentRequestResponse = { isOk: false };
         if (gw === "shepa") {
             result = await this.shepaService.init({ amount, description, email, mobile })
         }
         else if (gw === "zarinpal") {
             result = await this.zarinpalService.init({ amount, description, email, mobile })
+        } 
+        else if(gw === "zibal") {
+            result = await this.zibalService.init({ amount, description, email, mobile });
         }
-
+        
         return result;
     }
 
@@ -175,18 +210,23 @@ export class PaymentService {
 
     async handleCallback(query: CallbackQuery) {
         let authority: string;
-        let isOk: boolean;
+        let isOk: boolean = false;
         let text = "Your payment have been successfuly done";
         let title = "Everything is good";
+        let gateway: GatewayType;
         if(IsShepaQuery(query)) {
-            // handle for shepa
             authority = query.token;
             isOk = query.status === "success";
+            gateway = "shepa";
         }
         else if(IsZarinpalQuery(query)) {
-            // handle for zarin pal
             authority = query.Authority;
             isOk = query.Status === "OK";
+            gateway = "zarinpal";
+        } else if(IsZibalQuery(query)) {
+            authority = query.trackId.toString();
+            isOk = query.success === "1" && query.status === ZinalCallbackStatus.paied_not_approved;
+            gateway = "zibal";
         }
         else {
             text = "Your payment have been failed";
@@ -196,6 +236,7 @@ export class PaymentService {
 
         if(isOk) {
             await this.invoiceRepository.makePaymentSuccess(authority);
+            await this.verifyPayment(authority, gateway);
         } else {
             await this.invoiceRepository.makePaymentFailed(authority);
 
@@ -203,7 +244,43 @@ export class PaymentService {
             title = "Something went wrong with your payment";
         };
 
+
         return { status: isOk ? "ok" : "error", title, text };
+    }
+    private async verifyPayment(authority: string, gateway: GatewayType) {
+        if(gateway === "shepa") {
+            const { payment } = await this.invoiceRepository.findPaymentByAuthority(authority);
+            if(!payment) return;
+
+            const result = await this.shepaService.verify(authority, payment.amount);
+            console.log(result);
+
+            if(result) {
+                await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), result.cardNumber);
+            }
+
+        } else if(gateway === "zarinpal") {
+            const { payment } = await this.invoiceRepository.findPaymentByAuthority(authority);
+            if(!payment) return;
+
+            const result = await this.zarinpalService.verify(authority, payment.amount);
+            console.log(result);
+
+            if(result) {
+                await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), result.card_pan);
+            }
+            
+        } else if(gateway === "zibal") {
+            const { payment } = await this.invoiceRepository.findPaymentByAuthority(authority);
+            if(!payment) return;
+
+            const result = await this.zibalService.verify(Number(authority));
+            console.log(result);
+
+            if(result) {
+                await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), String(result.cardNumber));
+            }
+        }
     }
 
     async paymentStatus({ paymentId, invoiceId } : { paymentId: string, invoiceId: string }) {
@@ -269,22 +346,33 @@ export class PaymentService {
         return { gateway: paymentRequestResult, invoiceId: invoiceId, authority: paymentRequestResult.authority };
     }
 
-    async getReadyToPayLink({ mobile, userFullName, amount, description, readyToPayGateway}: GetReadyToPayLinkBody) {
+    async getReadyToPayLink({ invoiceId, mobile, userFullName, amount, description, readyToPayGateway}: GetReadyToPayLinkBody) {
         const gateway = readyToPayGateway || process.env.DEFAULT_GATEWAY;
         const isDynamic = typeof amount === "undefined";
-        const invoice = await this.invoiceRepository.createReadyToPayInvoice({
-            mobile,
-            readyToPayGateway: gateway,
-            unlimitAmount: isDynamic,
-            amount,
-            userFullName,
-            description,
-        });
+        const isExtension = typeof amount !== "undefined" && typeof invoiceId !== "undefined";
+        let invoice: Invoice | null = null;
+        if(!invoiceId) {
+            invoice = await this.invoiceRepository.createReadyToPayInvoice({
+                mobile,
+                readyToPayGateway: gateway,
+                unlimitAmount: isDynamic,
+                amount,
+                userFullName,
+                description,
+            });
+        } else if(invoiceId && amount) {
+            invoice = await this.invoiceRepository.extendInvoiceAmount(invoiceId, amount, gateway);
+        }
+        if(!invoice) {
+            throw new InternalServerErrorException("Operation failed");
+        }
+
         return { 
             token: invoice.readyToPayToken,
             readyToPayLink: (
                 isDynamic ? process.env.READY_TO_PAY_DYNAMIC_LINK : 
-                            process.env.READY_TO_PAY_LINK
+                isExtension ? process.env.INVOICE_EXTENSION_LINK :
+                              process.env.READY_TO_PAY_LINK
             ) + `?token=${invoice.readyToPayToken}`,
         };
     }
@@ -312,7 +400,7 @@ export class PaymentService {
             authority: paymentRequestResult.authority,
             gateway: invoice.readyToPayGateway! as GatewayType,
             mobile: invoice.mobile,
-            email: invoice.email,
+            email: email || invoice.email,
         });
         
         return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority };
@@ -325,6 +413,43 @@ export class PaymentService {
         }
 
         return { token, title: invoice.title, baseUrl: process.env.READY_TO_PAY_DYNAMIC_LINK! }
+    }
+
+    async handleInvoiceAmountExtension({ token }: { token: string }) {
+        const invoice = await this.invoiceRepository.findInvoiceByReadyToPayToken(token);
+        if (!invoice || invoice.unlimitAmount) {
+            throw new NotFoundException("Invoice not found");
+        }
+
+        const donePaymentsAmount = invoice.payments
+            .filter(p => p.status === "success")
+            .reduce((total, p) => total + p.amount, 0);
+        if (donePaymentsAmount + invoice.readyAmount! > invoice.totalAmount) {
+            throw new BadRequestException("One time payment link");
+        }
+
+        const paymentRequestResult = await this.sendPaymentRequestToGateway({ 
+            amount: invoice.readyAmount!, 
+            description: invoice.description || "Invoice amount extension",
+            gateway: invoice.readyToPayGateway! as GatewayType, 
+            email: invoice.email, 
+            mobile: invoice.mobile,
+        })
+        if (!paymentRequestResult.isOk || !paymentRequestResult.authority) {
+            throw new Error("Payment request failed");
+        }
+
+        const updatedInvoice = await this.invoiceRepository.addNewPayment(invoice._id.toString(), {
+            amount: invoice.readyAmount!,
+            description: invoice.description!,
+            authority: paymentRequestResult.authority,
+            gateway: invoice.readyToPayGateway! as GatewayType,
+            mobile: invoice.mobile,
+            email: invoice.email,
+        });
+        
+        return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority };
+
     }
 
     async handleReadyToPay({ token }: { token: string }) {
@@ -379,5 +504,9 @@ export class PaymentService {
         });
         
         return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority, waitingPayments };
+    }
+
+    async getAllPaymentsStatus() {
+        return await this.invoiceRepository.getAllPayments();
     }
 }

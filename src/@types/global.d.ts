@@ -7,6 +7,7 @@ namespace NodeJS {
         MAX_PAYMENT_LIMIT: string;
         READY_TO_PAY_LINK: string;
         READY_TO_PAY_DYNAMIC_LINK: string;
+        INVOICE_EXTENSION_LINK: string;
         DEFAULT_GATEWAY: "zarinpal" | "shepa";
         
         SHEPA_URL: string;
@@ -14,6 +15,9 @@ namespace NodeJS {
 
         ZARINPAL_URL: string;
         ZARINPAL_TOKEN: string;
+
+        ZIBAL_MERCHANT_ID: string;
+        ZIBAL_BASE_URL: string;
 
         MONGO_CONNECTION_STRING: string;
     }
