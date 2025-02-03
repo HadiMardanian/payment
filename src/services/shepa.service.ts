@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as Shepa from "shepa-payment-getaway";
+import Shepa from "shepa-payment-getaway";
 
 type PaymentVerifyResult = {
     amount: number;
