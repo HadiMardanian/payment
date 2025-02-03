@@ -53,7 +53,7 @@
                 if(!json?.gateway?.link) {
                     alert("Something went wrong!");
                 }
-                window.location = json.gateway.link;
+                window.open(json.gateway.link);
             });
     });
 </script>
