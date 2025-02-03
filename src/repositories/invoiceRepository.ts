@@ -206,4 +206,8 @@ export class InvoiceRepository {
     async findInvoiceByReadyToPayToken(token: string) {
         return await this.invoiceModel.findOne({ readyToPayToken: token });
     }
+
+    async getAllPayments() {
+        return await this.invoiceModel.find({}).lean();
+    }
 }

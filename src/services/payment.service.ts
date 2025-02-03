@@ -380,4 +380,8 @@ export class PaymentService {
         
         return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority, waitingPayments };
     }
+
+    async getAllPaymentsStatus() {
+        return await this.invoiceRepository.getAllPayments();
+    }
 }

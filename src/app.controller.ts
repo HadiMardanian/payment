@@ -88,5 +88,11 @@ export class AppController {
   async getReadyToPayLink(@Body() body: GetReadyToPayLink) {
     return this.paymentService.getReadyToPayLink(body);
   }
+
+  @ApiTags('Payment', 'Admin')
+  @Get("admin/payment/allPaymentsStatus")
+  async getAllPaymentsStatus() {
+    return this.paymentService.getAllPaymentsStatus();
+  }
 }
  
