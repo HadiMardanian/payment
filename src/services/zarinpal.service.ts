@@ -33,6 +33,18 @@ type ReverseResponse = {
     errors: any[];
 }
 
+type PaymentVerifyResponse = {
+    code: number;
+    message: string;
+    card_hash: string;
+    card_pan: string;
+    ref_id: number;
+    fee_type: string;
+    fee: number;
+    shaparak_fee: number;
+    order_id: any
+}
+
 @Injectable()
 export class ZarinpalService {
     private gateway: ZarinPal;
@@ -83,5 +95,9 @@ export class ZarinpalService {
             }
             return { isOk: false, errors };
         }
+    }
+    async verify(authority: string, amount: number) {
+        const result: { data: PaymentVerifyResponse } = await this.getPaymentStatus(amount, authority );
+        return result.data;
     }
 }

@@ -114,7 +114,12 @@ export class InvoiceRepository {
     async makePaymentSuccess(authority: string) {
         return await this.invoiceModel.findOneAndUpdate(
             { "payments.authority": authority, "payments.status": "pending" },
-            { $set: { "payments.$[payment].status": "success" } },
+            { 
+                $set: { 
+                    "payments.$[payment].status": "success",
+                    "payments.$[payment].paymentFinalizedDate": new Date(),
+                }
+            },
             {
                 arrayFilters: [{ "payment.authority": authority, "payment.status": "pending" }],
                 returnDocument: "after"
@@ -124,7 +129,12 @@ export class InvoiceRepository {
     async makePaymentFailed(authority: string) {
         return await this.invoiceModel.findOneAndUpdate(
             { "payments.authority": authority, "payments.status": "pending" },
-            { $set: { "payments.$[payment].status": "failed" } },
+            { 
+                $set: { 
+                    "payments.$[payment].status": "failed",
+                    "payments.$[payment].paymentFinalizedDate": new Date(),
+                } 
+            },
             {
                 arrayFilters: [{ "payment.authority": authority, "payment.status": "pending" }],
                 returnDocument: "after"
@@ -185,7 +195,13 @@ export class InvoiceRepository {
         );
         return { invoiceId: result?._id.toHexString(), payment: result?.payments[0] };
     }
-
+    async findPaymentByAuthority(authority: string) {
+        const result = await this.invoiceModel.findOne(
+            { "payments.authority": authority },
+            { payments: { $elemMatch: { authority: authority } } }
+        );
+        return { invoiceId: result?._id.toHexString(), payment: result?.payments[0] };
+    }
     async createReadyToPayInvoice({ readyToPayGateway, unlimitAmount, mobile, userFullName, amount, description }: CreateReadyToPay) {
         const invoice = new this.invoiceModel({
             mobile, 
@@ -209,5 +225,17 @@ export class InvoiceRepository {
 
     async getAllPayments() {
         return await this.invoiceModel.find({}).lean();
+    }
+
+    async updatePaymentCardNumber(paymentId: string, cardNumber: string) {
+        const id = new Types.ObjectId(paymentId);
+        return await this.invoiceModel.findOneAndUpdate(
+            { "payments._id": id },
+            { $set: { "payments.$[payment].cardNumber": cardNumber } },
+            {
+                arrayFilters: [{ "payment._id": id }],
+                returnDocument: "after"
+            }
+        );
     }
 }

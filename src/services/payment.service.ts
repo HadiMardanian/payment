@@ -175,18 +175,21 @@ export class PaymentService {
 
     async handleCallback(query: CallbackQuery) {
         let authority: string;
-        let isOk: boolean;
+        let isOk: boolean = false;
         let text = "Your payment have been successfuly done";
         let title = "Everything is good";
+        let gateway;
         if(IsShepaQuery(query)) {
             // handle for shepa
             authority = query.token;
             isOk = query.status === "success";
+            gateway = "shepa";
         }
         else if(IsZarinpalQuery(query)) {
             // handle for zarin pal
             authority = query.Authority;
             isOk = query.Status === "OK";
+            gateway = "zarinpal";
         }
         else {
             text = "Your payment have been failed";
@@ -196,6 +199,7 @@ export class PaymentService {
 
         if(isOk) {
             await this.invoiceRepository.makePaymentSuccess(authority);
+            await this.verifyPayment(authority, gateway);
         } else {
             await this.invoiceRepository.makePaymentFailed(authority);
 
@@ -203,7 +207,35 @@ export class PaymentService {
             title = "Something went wrong with your payment";
         };
 
+
         return { status: isOk ? "ok" : "error", title, text };
+    }
+    private async verifyPayment(authority: string, gateway: GatewayType) {
+        if(gateway === "shepa") {
+            const { payment } = await this.invoiceRepository.findPaymentByAuthority(authority);
+            if(!payment) return;
+
+            const result = await this.shepaService.verify(authority, payment.amount);
+            console.log(result);
+
+            if(result) {
+                await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), result.cardNumber);
+            }
+
+            return;
+        }
+
+        if(gateway === "zarinpal") {
+            const { payment } = await this.invoiceRepository.findPaymentByAuthority(authority);
+            if(!payment) return;
+
+            const result = await this.zarinpalService.verify(authority, payment.amount);
+            console.log(result);
+
+            if(result) {
+                await this.invoiceRepository.updatePaymentCardNumber(payment._id.toString(), result.card_pan);
+            }
+        }
     }
 
     async paymentStatus({ paymentId, invoiceId } : { paymentId: string, invoiceId: string }) {
@@ -312,7 +344,7 @@ export class PaymentService {
             authority: paymentRequestResult.authority,
             gateway: invoice.readyToPayGateway! as GatewayType,
             mobile: invoice.mobile,
-            email: invoice.email,
+            email: email || invoice.email,
         });
         
         return { gateway: paymentRequestResult, invoiceId: invoice._id.toString(), authority: paymentRequestResult.authority };

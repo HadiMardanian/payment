@@ -25,6 +25,12 @@ export class Payment {
 
     @Prop({ required: true, enum: ["pending", "failed", "success", "canceled", "reversed", "waiting"] })
     status: "pending" | "failed" | "success" | "canceled" | "reversed" | "waiting";
+
+    @Prop()
+    paymentFinalizedDate?: Date;
+
+    @Prop()
+    cardNumber?: string
 }
 
 export const PaymentModel = SchemaFactory.createForClass(Payment);

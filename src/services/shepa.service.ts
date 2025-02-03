@@ -46,11 +46,16 @@ export class ShepaService {
     }
 
     async verify(authority: string, amount: number) {
-        const result: PaymentVerifyResult= await this.shepa.verify(authority, amount);
-        if(!result["refid"]) {
+        try {
+            const result: PaymentVerifyResult= await this.shepa.verify(authority, amount);
+            if(!result["refid"]) {
+                return null;
+            }
+            return result;
+        } catch (error) {
+            console.error(error);
             return null;
         }
-        return result;
     }
 
     async reverse(amount: number, transactionId: number) {
